@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STAKE MINES PREDICTOR MADE BY KRISPY</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Custom styles for a modern, dark aesthetic */
+        :root {
+            --panel-bg: #1e293b; /* Slate-800 */
+            --tile-bg: #334155; /* Slate-700 */
+            --mine-color: #ef4444; /* Red-500 */
+            --gem-color: #3b82f6; /* Blue-500 (New color for safe gems) */
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a; /* Slate-900 */
+            color: #f1f5f9; /* Slate-100 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .panel {
+            background-color: var(--panel-bg);
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.5);
+        }
+        .grid-tile {
+            background-color: var(--tile-bg);
+            transition: transform 0.2s, background-color 0.3s;
+        }
+        /* Style for the detected Mine (Hazard) - unused in current JS but kept for CSS consistency */
+        .mine-indicator {
+            background-color: var(--mine-color);
+            border: 2px solid #f87171;
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.7);
+        }
+        /* Style for the detected Safe Gem/Treasure */
+        .gem-indicator {
+            background-color: var(--gem-color);
+            border: 2px solid #60a5fa;
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.7);
+        }
+        .input-control {
+            background-color: #334155;
+            border: 1px solid #475569;
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            width: 100%;
+        }
+        .btn-primary {
+            transition: background-color 0.2s, transform 0.1s;
+        }
+        .btn-primary:hover {
+            transform: translateY(-1px);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="panel w-full max-w-4xl p-8 rounded-xl">
+        <h1 class="text-3xl font-bold mb-6 text-center text-indigo-400">STAKE MINES PREDICTOR</h1>
+
+        <div id="security-panel" class="bg-slate-700 p-8 rounded-lg text-center transition-all duration-500">
+            <h2 class="text-2xl font-semibold mb-4">Panel Access</h2>
+            <p class="mb-4 text-slate-300">Please enter the password to power on the system.</p>
+            <input type="password" id="password-input" placeholder="Access Password" class="input-control max-w-xs mx-auto mb-4 text-center">
+            <button id="unlock-button" class="btn-primary bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg flex items-center justify-center mx-auto">
+                <i data-lucide="unlock" class="w-5 h-5 mr-2"></i>
+                Power On Panel
+            </button>
+            <p id="auth-message" class="mt-4 text-red-400"></p>
+        </div>
+
+        <div id="detector-panel" class="hidden transition-all duration-500 space-y-6">
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                
+                <div class="md:col-span-1 bg-slate-700 p-6 rounded-lg space-y-4">
+                    <h2 class="text-xl font-semibold text-indigo-300 mb-4">Detection Settings</h2>
+
+                    <div>
+                        <label for="mines-count" class="block text-sm font-medium mb-2">Number of Mines (1 to 3):</label>
+                        <select id="mines-count" class="input-control appearance-none">
+                            <option value="1">1 Mine</option>
+                            <option value="2">2 Mines</option>
+                            <option value="3" selected>3 Mines</option>
+                        </select>
+                    </div>
+
+                    <div id="status-display" class="bg-slate-800 p-4 rounded-lg border-l-4 border-yellow-500">
+                        <p class="font-medium text-yellow-300">System Status:</p>
+                        <p id="confidence-output" class="text-2xl font-bold text-white mt-1">Ready</p>
+                    </div>
+
+                    <button id="detect-button" class="btn-primary bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg w-full flex items-center justify-center" disabled>
+                        <i data-lucide="scan-line" class="w-5 h-5 mr-2"></i>
+                        Initiate Scan
+                    </button>
+
+                    <button id="reset-button" class="btn-primary bg-slate-500 hover:bg-slate-600 text-white font-bold py-3 px-4 rounded-lg w-full flex items-center justify-center">
+                        <i data-lucide="rotate-ccw" class="w-5 h-5 mr-2"></i>
+                        Reset Board
+                    </button>
+
+                    <div>
+                        <label for="server-hash-input" class="block text-sm font-medium mb-2 text-yellow-300">Active Server Hash (64 Characters)</label>
+                        <input type="text" id="server-hash-input" placeholder="Enter 64-character hash..." class="input-control" maxlength="64">
+                        <p id="hash-feedback" class="text-xs mt-1 h-4 text-red-400">Hash required to enable scan.</p>
+                    </div>
+                </div>
+
+                <div class="md:col-span-2 bg-slate-700 p-6 rounded-lg">
+                    <h2 class="text-xl font-semibold text-indigo-300 mb-4">Detection Grid (5x5)</h2>
+                    <div id="mine-grid" class="grid grid-cols-5 gap-2 aspect-square">
+                        </div>
+                </div>
+
+            </div>
+            
+        </div>
+    </div>
+    
+    <script>
+        // === CORE CONFIGURATION ===
+        const ACCESS_PASSWORD = 'RJMM@18112008'; 
+        const GRID_SIZE = 25; // 5x5 grid
+        const REQUIRED_HASH_LENGTH = 64; // The mandatory 64 character length
+
+        // === STATE VARIABLES ===
+        let minesLocations = [];
+        let isPanelUnlocked = false;
+        let isThreatDetected = false;
+
+        // === ELEMENT REFERENCES ===
+        const securityPanel = document.getElementById('security-panel');
+        const detectorPanel = document.getElementById('detector-panel');
+        const passwordInput = document.getElementById('password-input');
+        const unlockButton = document.getElementById('unlock-button');
+        const authMessage = document.getElementById('auth-message');
+        const mineGrid = document.getElementById('mine-grid');
+        const minesCountSelect = document.getElementById('mines-count');
+        const detectButton = document.getElementById('detect-button');
+        const resetButton = document.getElementById('reset-button');
+        const confidenceOutput = document.getElementById('confidence-output');
+        
+        // Server Hash References
+        const serverHashInput = document.getElementById('server-hash-input');
+        const hashFeedback = document.getElementById('hash-feedback');
+
+        /**
+         * Updates the status display with a new message, color, and optional border.
+         * @param {string} message - The message to display.
+         * @param {string} colorClass - Tailwind color class (e.g., 'text-green-400').
+         * @param {string} borderClass - Tailwind border class (e.g., 'border-green-500').
+         */
+        function updateStatus(message, colorClass, borderClass) {
+            const statusDisplay = document.getElementById('status-display');
+            confidenceOutput.textContent = message;
+            
+            // Clear previous classes
+            confidenceOutput.classList.remove('text-white', 'text-red-400', 'text-green-400', 'text-yellow-300');
+            statusDisplay.classList.remove('border-yellow-500', 'border-green-500', 'border-red-500');
+
+            // Add new classes
+            confidenceOutput.classList.add(colorClass);
+            statusDisplay.classList.add(borderClass);
+        }
+
+        /**
+         * Checks the hash input length and updates the scan button state and feedback message.
+         */
+        function updateScanButtonState() {
+            if (!isPanelUnlocked) {
+                detectButton.disabled = true;
+                return;
+            }
+            
+            const hashLength = serverHashInput.value.length;
+            
+            if (hashLength === REQUIRED_HASH_LENGTH) {
+                hashFeedback.textContent = 'Hash Accepted. System ready for scan.';
+                hashFeedback.classList.remove('text-red-400');
+                hashFeedback.classList.add('text-green-400');
+                detectButton.disabled = false; // Enable the button!
+            } else {
+                const remaining = REQUIRED_HASH_LENGTH - hashLength;
+                
+                if (hashLength > REQUIRED_HASH_LENGTH) {
+                    serverHashInput.value = serverHashInput.value.slice(0, REQUIRED_HASH_LENGTH);
+                    hashFeedback.textContent = 'ERROR: Hash truncated to 64 characters.';
+                } else if (hashLength > 0) {
+                    hashFeedback.textContent = `Needs ${remaining} more characters.`;
+                } else {
+                    hashFeedback.textContent = 'Hash required to enable scan.';
+                }
+                
+                hashFeedback.classList.remove('text-green-400');
+                hashFeedback.classList.add('text-red-400');
+                detectButton.disabled = true; // Disable the button!
+            }
+        }
+
+
+        /**
+         * Unlocks the panel with the correct password.
+         */
+        function unlockPanel() {
+            if (passwordInput.value === ACCESS_PASSWORD) {
+                isPanelUnlocked = true;
+                securityPanel.classList.add('hidden');
+                detectorPanel.classList.remove('hidden');
+                authMessage.textContent = 'Access Successful!';
+                
+                resetGame(); // Start with a fresh board
+                
+            } else {
+                authMessage.textContent = 'Incorrect password. Please try again.';
+                passwordInput.value = '';
+            }
+        }
+
+        /**
+         * Sets random mine (threat) locations on the grid.
+         * @param {number} count - The number of mines (1, 2, or 3).
+         */
+        function placeMines(count) {
+            minesLocations = [];
+            const allTiles = Array.from({ length: GRID_SIZE }, (_, i) => i);
+            
+            // Randomly select mine locations
+            for (let i = 0; i < count; i++) {
+                const randomIndex = Math.floor(Math.random() * allTiles.length);
+                const mineIndex = allTiles.splice(randomIndex, 1)[0]; // Remove and get the index
+                minesLocations.push(mineIndex);
+            }
+            console.log(`Mines (${count}) placed at:`, minesLocations);
+        }
+
+        /**
+         * Executes the threat detection process and displays results.
+         */
+        function detectThreat() {
+            if (isThreatDetected) return; 
+
+            // Re-check hash length before starting scan
+            if (serverHashInput.value.length !== REQUIRED_HASH_LENGTH) {
+                    console.error("Cannot initiate scan: Invalid Server Hash length.");
+                    return;
+            }
+
+            isThreatDetected = true;
+            detectButton.disabled = true;
+            minesCountSelect.disabled = true;
+            
+            // Simulate scanning status
+            updateStatus('Scanning... DO NOT CLOSE WINDOW', 'text-yellow-300', 'border-yellow-500');
+
+            // Simulate scanning delay for realism
+            setTimeout(() => {
+                // 1. Determine the number of mines and required safe reveals based on user request
+                const mineCount = parseInt(minesCountSelect.value);
+                let safeRevealCount = 0;
+                
+                // Apply user logic: 1 Mine -> 8 Gems, 2 Mines -> 6 Gems, 3 Mines -> 4 Gems
+                if (mineCount === 1) {
+                    safeRevealCount = 8;
+                } else if (mineCount === 2) {
+                    safeRevealCount = 6;
+                } else if (mineCount === 3) {
+                    safeRevealCount = 4;
+                } else {
+                    safeRevealCount = 0; // Fallback
+                }
+
+                // Generate confidence percentage (85% to 99%)
+                const confidence = (85 + Math.floor(Math.random() * 15)).toFixed(0);
+
+                updateStatus(`Scan Complete - Confidence: ${confidence}%`, 'text-green-400', 'border-green-500');
+                
+                
+                // 2. Identify all safe locations and randomly select a subset to reveal as GEMS
+                const safeIndices = [];
+                for (let i = 0; i < GRID_SIZE; i++) {
+                    if (!minesLocations.includes(i)) {
+                        safeIndices.push(i);
+                    }
+                }
+
+                // Shuffle safeIndices and pick the top N for revelation (Fisher-Yates shuffle)
+                for (let i = safeIndices.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [safeIndices[i], safeIndices[j]] = [safeIndices[j], safeIndices[i]];
+                }
+                
+                const revealedSafeGems = safeIndices.slice(0, safeRevealCount);
+                
+
+                // 3. Display results on the grid tiles
+                document.querySelectorAll('.grid-tile').forEach((tile, index) => {
+                    // Clear any previous color changes
+                    tile.classList.remove('mine-indicator', 'gem-indicator');
+                    tile.classList.add('bg-slate-700'); // Ensure default background
+                    tile.innerHTML = ''; 
+                    
+                    const isRevealedGem = revealedSafeGems.includes(index);
+                    
+                    if (isRevealedGem) {
+                        // Reveal as SAFE GEM
+                        tile.classList.remove('bg-slate-700', 'hover:bg-slate-600');
+                        tile.classList.add('gem-indicator', 'flex', 'flex-col', 'items-center', 'justify-center');
+                        tile.innerHTML = `
+                            <i data-lucide="gem" class="w-8 h-8 text-white mb-1"></i>
+                            <span class="text-xs font-bold text-white">SAFE GEM</span>
+                        `;
+                    } else {
+                        // Keep unrevealed
+                        tile.classList.add('flex', 'items-center', 'justify-center');
+                        tile.classList.add('hover:bg-slate-600'); 
+                        tile.innerHTML = `
+                            <i data-lucide="scan" class="w-6 h-6 text-slate-400"></i>
+                        `;
+                    }
+                });
+                
+                // Re-render Lucide icons inside the tiles
+                if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                    lucide.createIcons();
+                }
+            }, 1500); // 1.5 second delay for scanning
+        }
+
+        /**
+         * Clears the game board and resets to the initial state.
+         */
+        function resetGame() {
+            // 1. Reset state
+            isThreatDetected = false;
+            
+            // 2. Set new mine locations based on the current select value
+            const selectedMines = parseInt(minesCountSelect.value);
+            placeMines(selectedMines); 
+
+            // 3. Reset UI
+            mineGrid.innerHTML = ''; // Clear the grid
+            updateStatus('Ready', 'text-white', 'border-yellow-500'); 
+            minesCountSelect.disabled = false;
+            
+            // Update button state based on hash validity
+            updateScanButtonState(); 
+
+            // 4. Regenerate grid tiles
+            for (let i = 0; i < GRID_SIZE; i++) {
+                const tile = document.createElement('div');
+                tile.className = 'grid-tile aspect-square rounded-lg flex items-center justify-center text-xs font-semibold cursor-pointer bg-slate-700 hover:bg-slate-600'; 
+                tile.innerHTML = `
+                    <i data-lucide="scan" class="w-6 h-6 text-slate-400"></i>
+                `;
+                tile.setAttribute('data-index', i);
+                mineGrid.appendChild(tile);
+            }
+            
+            // Re-render Lucide icons
+            if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                lucide.createIcons();
+            }
+        }
+
+        /**
+         * Main function to set up event listeners and initial state.
+         */
+        function setupDetectorPanel() {
+            // Unlocking Event
+            unlockButton.addEventListener('click', unlockPanel);
+            passwordInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    unlockPanel();
+                }
+            });
+
+            // Control Events (Mine Detector)
+            detectButton.addEventListener('click', detectThreat);
+            resetButton.addEventListener('click', resetGame);
+            minesCountSelect.addEventListener('change', resetGame);
+            
+            // Server Hash Input validation events
+            serverHashInput.addEventListener('input', updateScanButtonState);
+            serverHashInput.addEventListener('change', updateScanButtonState);
+
+            // Initial icon rendering
+            if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                lucide.createIcons();
+            }
+            
+            // Ensure button state is correctly set on load
+            updateScanButtonState();
+        }
+
+        // Initialize the application once the DOM is ready
+        window.onload = setupDetectorPanel;
+    </script>
+
+</body>
+</html>
